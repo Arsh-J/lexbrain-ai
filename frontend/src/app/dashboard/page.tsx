@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { queryApi, authApi, clearToken, isLoggedIn } from "@/lib/api";
+import { Aurora } from "@/components/ui/aurora";
 
 interface HistoryItem {
   query_id: number;
@@ -179,6 +180,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--ink)", fontFamily: "'Syne', system-ui, sans-serif" }}>
+      <Aurora colorStops={["#1D4ED8", "#6366F1", "#060D18"]} amplitude={1.5} blend={120} speed={1.4} opacity={0.6} />
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 260, background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(59,130,246,0.07) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
 
       {/* NAV */}
