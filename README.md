@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- HERO IMAGE -->
-<img src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&q=80" width="280" alt="LexAI — AI Legal Assistant for India" style="border-radius:12px"/>
+<img src="https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=600&q=80" width="280" alt="LexAI — AI Legal Assistant for India" style="border-radius:12px"/>
 
 <br/>
 <br/>
