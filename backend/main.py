@@ -1,9 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, query, report
 from database import engine, Base
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="AI Legal Assistant API",
@@ -13,18 +10,15 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "https://lexbrain-ai.vercel.app",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+Base.metadata.create_all(bind=engine)
+
+from routers import auth, query, report
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(query.router, prefix="/api/query", tags=["Legal Query"])
 app.include_router(report.router, prefix="/api/report", tags=["Report"])
