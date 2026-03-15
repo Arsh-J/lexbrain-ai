@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const [loadingHistory, setLH]   = useState(true);
   const [historyError, setHE]     = useState("");
   const [userName, setUserName]   = useState("");
+  const [mounted, setMounted]     = useState(false);
   const [agentStep, setAgentStep] = useState(0);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [listening, setListening] = useState(false);
@@ -51,13 +52,17 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn()) { router.replace("/login"); return; }
+    if (!isLoggedIn()) { 
+      window.location.href = "/login";
+      return; 
+    }
+    setMounted(true);
     fetchHistory();
     // Load user name - failure here should NOT log user out
     authApi.getMe()
       .then(r => setUserName(r.data.name || ""))
       .catch(() => { /* silent — don't disrupt the page */ });
-  }, [router, fetchHistory]);
+  }, [fetchHistory]);
 
   // Cycle agent status while loading
   useEffect(() => {
@@ -77,10 +82,10 @@ export default function DashboardPage() {
       // Refresh history in background then navigate
       fetchHistory();
       router.push(`/case/${res.data.query_id}`);
+      // intentional: don't clear loading state here to keep the agent progress bar active until unmount
     } catch (err: any) {
       const detail = err.response?.data?.detail || err.message || "Analysis failed";
       toast.error(detail);
-    } finally {
       setLoading(false);
     }
   };
@@ -88,7 +93,7 @@ export default function DashboardPage() {
   const handleLogout = () => {
     clearToken();
     toast.success("Signed out.");
-    router.push("/");
+    window.location.href = "/";
   };
 
   const handleDeleteOne = (id: number) => {
@@ -177,6 +182,10 @@ export default function DashboardPage() {
   ];
 
   const firstInitial = userName ? userName[0].toUpperCase() : "?";
+
+  if (!mounted) {
+    return <div style={{ minHeight: "100vh", background: "var(--ink)" }} />;
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--ink)", fontFamily: "'Syne', system-ui, sans-serif" }}>

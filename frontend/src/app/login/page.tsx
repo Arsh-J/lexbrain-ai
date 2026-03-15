@@ -11,9 +11,25 @@ export default function LoginPage() {
   const [form, setForm]     = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]  = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [msgIdx, setMsgIdx] = useState(0);
+  const M = ["Verifying...", "Decrypting...", "Opening Case Room..."];
 
   useEffect(() => {
-    if (isLoggedIn()) { router.replace("/dashboard"); return; }
+    if (loading) {
+      const interval = setInterval(() => {
+        setMsgIdx(i => Math.min(i + 1, M.length - 1));
+      }, 1500);
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (isLoggedIn()) {
+      window.location.href = "/dashboard";
+      return;
+    }
+    setMounted(true);
     // Pre-compile dashboard so redirect after login is instant
     router.prefetch("/dashboard");
     router.prefetch("/signup");
@@ -22,14 +38,17 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setMsgIdx(0);
     try {
       const res = await authApi.login(form);
       saveToken(res.data.access_token); // saved in cookie + localStorage — persists until sign out
       toast.success("Welcome back, Counselor.");
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
+      // Intentionally intentionally not setting loading false so button stays disabled while page transitions
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Invalid credentials.");
-    } finally { setLoading(false); }
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,7 +145,7 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} className="btn-amber"
               style={{ width: "100%", justifyContent: "center", marginTop: 4, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? (
-                <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "#0A0C10", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> Verifying...</>
+                <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "#0A0C10", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> {M[msgIdx]}</>
               ) : "Enter the Case Room →"}
             </button>
           </form>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -99,6 +99,26 @@ function RadarOrb() {
     </div>
   );
 }
+
+const NavBtn = ({ href, children, style, className, msg = "Opening..." }: any) => {
+  const [isNavigating, setIsNavigating] = useState(false);
+  const router = useRouter();
+
+  const handleNav = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isNavigating) return;
+    setIsNavigating(true);
+    router.push(href);
+  };
+
+  return (
+    <a href={href} onClick={handleNav} className={className} style={{...style, opacity: isNavigating ? 0.7 : 1, pointerEvents: isNavigating ? "none" : "auto" }}>
+      {isNavigating ? (
+        <><span style={{ width: 14, height: 14, display: "inline-block", border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "currentColor", borderRadius: "50%", animation: "spin 0.7s linear infinite", marginRight: 8, verticalAlign: "middle" }} /> {msg}</>
+      ) : children}
+    </a>
+  );
+};
 
 /* ─── Legal AI Visual (Canvas) ─────────────────────────────────────────── */
 function LegalAIVisual() {
@@ -493,11 +513,11 @@ export default function LandingPage() {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             {loggedIn ? (
-              <Link href="/dashboard" className="btn-amber" style={{ fontSize: 13, padding: "9px 20px" }}>Open Dashboard →</Link>
+              <NavBtn href="/dashboard" className="btn-amber" style={{ fontSize: 13, padding: "9px 20px" }}>Open Dashboard →</NavBtn>
             ) : (
               <>
-                <Link href="/login" className="btn-ghost" style={{ fontSize: 13, padding: "8px 18px" }}>Sign In</Link>
-                <Link href="/signup" className="btn-amber" style={{ fontSize: 13, padding: "9px 20px" }}>Start Free →</Link>
+                <NavBtn href="/login" className="btn-ghost" style={{ fontSize: 13, padding: "8px 18px" }}>Sign In</NavBtn>
+                <NavBtn href="/signup" className="btn-amber" style={{ fontSize: 13, padding: "9px 20px" }}>Start Free →</NavBtn>
               </>
             )}
           </div>
@@ -532,8 +552,8 @@ export default function LandingPage() {
             </p>
 
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              <Link href="/signup" className="btn-amber">Analyze My Case Free →</Link>
-              <Link href="/login" className="btn-ghost">Sign In</Link>
+              <NavBtn href="/signup" className="btn-amber">Analyze My Case Free →</NavBtn>
+              <NavBtn href="/login" className="btn-ghost">Sign In</NavBtn>
             </div>
 
             {/* Stats */}
@@ -619,9 +639,9 @@ export default function LandingPage() {
           <p style={{ color: "var(--text)", fontSize: 15, lineHeight: 1.75, marginBottom: 36, maxWidth: 480, margin: "0 auto 36px" }}>
             Free. No credit card. Log in once — your cases stay until you sign out.
           </p>
-          <Link href="/signup" className="btn-amber" style={{ fontSize: 16, padding: "15px 40px" }}>
+          <NavBtn href="/signup" className="btn-amber" style={{ fontSize: 16, padding: "15px 40px" }}>
             Begin Investigation →
-          </Link>
+          </NavBtn>
         </div>
       </section>
 

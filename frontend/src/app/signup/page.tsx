@@ -11,9 +11,25 @@ export default function SignupPage() {
   const [form, setForm]     = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw]  = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [msgIdx, setMsgIdx] = useState(0);
+  const M = ["Creating Account...", "Securing Credentials...", "Opening Case File..."];
 
   useEffect(() => {
-    if (isLoggedIn()) { router.replace("/dashboard"); return; }
+    if (loading) {
+      const interval = setInterval(() => {
+        setMsgIdx(i => Math.min(i + 1, M.length - 1));
+      }, 1500);
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (isLoggedIn()) {
+      window.location.href = "/dashboard";
+      return;
+    }
+    setMounted(true);
     // Pre-compile dashboard so redirect after signup is instant
     router.prefetch("/dashboard");
     router.prefetch("/login");
@@ -23,21 +39,27 @@ export default function SignupPage() {
     e.preventDefault();
     if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
     setLoading(true);
+    setMsgIdx(0);
     try {
       await authApi.signup(form);
       const res = await authApi.login({ email: form.email, password: form.password });
       saveToken(res.data.access_token);
       toast.success("Case file opened. Welcome to LexBrain AI.");
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Signup failed. Try again.");
-    } finally { setLoading(false); }
+      setLoading(false);
+    }
   };
 
   const pw = form.password;
   const strength = pw.length === 0 ? 0 : pw.length < 6 ? 1 : pw.length < 10 ? 2 : 3;
   const sColors  = ["transparent", "#EF4444", "#3B82F6", "#34D399"];
   const sLabels  = ["", "Weak", "Fair", "Strong"];
+
+  if (!mounted) {
+    return <div style={{ minHeight: "100vh", background: "var(--ink)", display: "flex", alignItems: "center", justifyContent: "center" }} />;
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", background: "var(--ink)", fontFamily: "'Syne', system-ui, sans-serif" }}>
@@ -135,7 +157,7 @@ export default function SignupPage() {
             <button type="submit" disabled={loading} className="btn-amber"
               style={{ width: "100%", justifyContent: "center", marginTop: 6, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? (
-                <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "#0A0C10", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> Opening Case File...</>
+                <><span style={{ width: 14, height: 14, border: "2px solid rgba(0,0,0,0.3)", borderTopColor: "#0A0C10", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> {M[msgIdx]}</>
               ) : "Open My Case File →"}
             </button>
           </form>

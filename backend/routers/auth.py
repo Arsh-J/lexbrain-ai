@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 from auth_utils import hash_password, verify_password, create_access_token, get_current_user
-
+from main import limiter
 router = APIRouter()
 
 @router.post("/signup", response_model=schemas.UserOut, status_code=201)
-def signup(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")
+def signup(request: Request, user_data: schemas.UserCreate, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -25,8 +26,10 @@ def signup(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=schemas.Token)
 def login(creds: schemas.UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == creds.email).first()
-    if not user or not verify_password(creds.password, user.password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user:
+        raise HTTPException(status_code=401, detail="This email is not registered with us")
+    if not verify_password(creds.password, user.password):
+        raise HTTPException(status_code=401, detail="The password you entered is incorrect")
 
     token = create_access_token({"sub": str(user.id)})
     return {"access_token": token, "token_type": "bearer"}

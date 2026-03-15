@@ -1,16 +1,42 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
 
 class UserCreate(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
+    name: str = Field(..., min_length=2, max_length=50, pattern=r"^[a-zA-Z\s\-']+$", description="Only letters, spaces, hyphens, and apostrophes are allowed.")
+    email: EmailStr = Field(..., max_length=100)
+    password: str = Field(..., min_length=6, max_length=100, pattern=r"^[^\s;'\"]+$", description="Password cannot contain spaces, semicolons, or quotes.")
+
+    @field_validator("name", mode="before")
+    def strip_and_check_name(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if len(v) < 2:
+                raise ValueError("Name must be at least 2 characters long")
+            if len(v) > 50:
+                raise ValueError("Name cannot exceed 50 characters")
+        return v
+
+    @field_validator("email", mode="before")
+    def lowercase_and_check_email(cls, v):
+        if isinstance(v, str):
+            if len(v) > 100:
+                raise ValueError("Email cannot exceed 100 characters")
+            return v.lower()
+        return v
+
+    @field_validator("password")
+    def check_password_length(cls, v):
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters long")
+        if len(v) > 100:
+            raise ValueError("Password cannot exceed 100 characters")
+        return v
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., max_length=100)
+    password: str = Field(..., min_length=6, max_length=100, pattern=r"^[^\s;'\"]+$")
 
 class UserOut(BaseModel):
     id: int
@@ -27,7 +53,15 @@ class Token(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    query_text: str
+    query_text: str = Field(..., min_length=20, max_length=2000)
+
+    @field_validator("query_text")
+    def check_query_text(cls, v):
+        if len(v) < 20:
+            raise ValueError("Query text must be at least 20 characters long to provide enough context.")
+        if len(v) > 2000:
+            raise ValueError("Query text cannot exceed 2000 characters.")
+        return v
 
 class IPCSectionOut(BaseModel):
     section_number: str
