@@ -65,13 +65,60 @@ export const authApi = {
   getMe: () => api.get("/api/auth/me"),
 };
 
+// ── History cache helpers (localStorage + 5-min TTL to match Redis TTL) ──
+const HISTORY_CACHE_KEY = "history_cache";
+const HISTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getHistoryCache(): any[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > HISTORY_CACHE_TTL_MS) {
+      localStorage.removeItem(HISTORY_CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setHistoryCache(data: any[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function clearHistoryCache() {
+  if (typeof window !== "undefined") localStorage.removeItem(HISTORY_CACHE_KEY);
+}
+
 export const queryApi = {
-  analyze: (query_text: string) =>
-    api.post("/api/query/analyze", { query_text }),
-  history: () => api.get("/api/query/history"),
+  analyze: (query_text: string) => {
+    clearHistoryCache();
+    return api.post("/api/query/analyze", { query_text });
+  },
+  history: async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      const cached = getHistoryCache();
+      if (cached !== null) return { data: cached };
+    }
+    const res = await api.get("/api/query/history");
+    setHistoryCache(res.data);
+    return res;
+  },
   getById: (id: number) => api.get(`/api/query/${id}`),
-  deleteOne: (id: number) => api.delete(`/api/query/${id}`),
-  deleteAll: () => api.delete("/api/query/history"),
+  deleteOne: (id: number) => {
+    clearHistoryCache();
+    return api.delete(`/api/query/${id}`);
+  },
+  deleteAll: () => {
+    clearHistoryCache();
+    return api.delete("/api/query/history");
+  },
 };
 
 export const reportApi = {

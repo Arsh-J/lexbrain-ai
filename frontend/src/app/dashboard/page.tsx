@@ -36,11 +36,11 @@ export default function DashboardPage() {
     "✍️  Agent 5 — Writing case summary...",
   ];
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (forceRefresh = false) => {
     setLH(true);
     setHE("");
     try {
-      const r = await queryApi.history();
+      const r = await queryApi.history(forceRefresh);
       setHistory(Array.isArray(r.data) ? r.data : []);
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || "Failed to load history";
@@ -340,7 +340,7 @@ export default function DashboardPage() {
                       {history.length}
                     </span>
                   )}
-                  <button onClick={fetchHistory} title="Refresh history"
+                  <button onClick={() => fetchHistory(true)} title="Refresh history"
                     style={{ background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--dim)", fontSize: 12, padding: "3px 8px", cursor: "pointer", transition: "all 0.2s" }}
                     onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(59,130,246,0.3)"}
                     onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"}>
@@ -357,7 +357,7 @@ export default function DashboardPage() {
                 <div style={{ padding: "16px", background: "rgba(224,82,82,0.06)", border: "1px solid rgba(224,82,82,0.2)", borderRadius: 10 }}>
                   <p style={{ fontSize: 12, color: "#E05252", margin: "0 0 8px" }}>⚠ Could not load history</p>
                   <p style={{ fontSize: 11, color: "var(--dim)", margin: "0 0 10px" }}>{historyError}</p>
-                  <button onClick={fetchHistory} style={{ fontSize: 11, color: "var(--amber)", background: "none", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "'Syne', sans-serif" }}>
+                  <button onClick={() => fetchHistory(true)} style={{ fontSize: 11, color: "var(--amber)", background: "none", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "'Syne', sans-serif" }}>
                     Retry
                   </button>
                 </div>
