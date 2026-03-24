@@ -146,13 +146,18 @@ def get_history(
     current_user: models.User = Depends(get_current_user)
 ):
     cache_key = f"history:{current_user.id}"
+
+    # STEP 1: Redis first — always
     cached = _redis_get(cache_key)
     if cached is not None:
+        logger.info("Cache HIT %s", cache_key)
         try:
             return json.loads(cached)
         except Exception:
-            pass
+            pass  # corrupted cache — fall through to DB
 
+    # STEP 2: Cache miss — hit the database (filtered strictly by this user)
+    logger.info("Cache MISS %s — querying DB", cache_key)
     queries = db.query(models.UserQuery).filter(
         models.UserQuery.user_id == current_user.id,
         models.UserQuery.query_text != ""
@@ -167,7 +172,11 @@ def get_history(
         for q in queries
     ]
 
+    # STEP 3: Store in Redis immediately (5 minute TTL)
     _redis_set(cache_key, json.dumps(result), ex=300)
+    logger.info("Cached %s for 300s (%d items)", cache_key, len(result))
+
+    # STEP 4: Return
     return result
 
 

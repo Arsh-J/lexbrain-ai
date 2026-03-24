@@ -90,3 +90,13 @@ class QueryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., max_length=100)
+
+
+class VerifyOtpRequest(BaseModel):
+    email: EmailStr = Field(..., max_length=100)
+    otp: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    new_password: str = Field(..., min_length=6, max_length=100, pattern=r"^[^\s;'\"]+$")

@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -26,3 +27,4 @@ class UserQuery(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="queries")
+    # OTPs for password reset are stored in Redis (TTL 600s), not in the DB.

@@ -44,9 +44,14 @@
 
 ## ⚡ What's New (March 2026)
 
-- **Redis Caching:** Integrated Redis to cache AI analysis results and user history, reducing latency by up to 80% for repeated lookups.
-- **Frontend UX Overhaul:** Eliminated UI flickering on auth pages and improved loading state persistence for a smoother "premium" feel.
-- **Enhanced Reliability:** Added explicit Redis connection health checks and automatic fallbacks.
+- **Secure Forgot Password (OTP):** Full two-step password recovery — user requests OTP → 6-digit code sent to their registered email via Resend API → OTP verified against Redis (10-min TTL) → password updated. Rate-limited to 5 OTP requests per email per hour.
+- **Session Security:** Enforced 10-hour absolute JWT expiry and 2-hour inactivity auto-logout. 401 interceptor clears token and redirects with reason (`?reason=expired` / `?reason=idle`).
+- **History Isolation Fixed:** Redis cache keys are now strictly user-scoped (`history:{user_id}`) — different users can no longer see each other's history.
+- **Login Performance:** Fast-fail before bcrypt for obviously-wrong passwords (< 6 chars) — skips 300ms hash cost. Instant client-side validation for empty/malformed fields.
+- **Toast Timing Fixed:** Welcome toast now shows on dashboard (via `sessionStorage` flag) instead of disappearing during hard reload. Analysis complete toast fires after navigation so it's visible on the case page.
+- **Accurate Loading Messages:** Login phases cycle every 500ms (matches real bcrypt ~300–600ms latency). Agent steps cycle every 2600ms across 5 agents (~13s total, matching Gemini response time).
+- **Redis Caching:** Integrated Redis to cache AI analysis results and user history, reducing latency by up to 80% for repeated lookups. Auto-falls back to `fakeredis` with no config required.
+- **Email Service:** `email_service.py` uses Resend API with `load_dotenv(override=True)` at module load — no stale env cache. Pre-built HTML template (no per-call string rebuild). Falls back to console print in development.
 
 ---
 
@@ -215,16 +220,17 @@ curl -X POST https://lexbrain-ai.onrender.com/api/query/analyze \
 ```
 ai-legal-assistant/
 ├── backend/
-│   ├── main.py                  ← FastAPI app · CORS · router registration
+│   ├── main.py                  ← FastAPI app · CORS · rate limiting · router registration
 │   ├── auth_utils.py            ← JWT create/verify · bcrypt hashing · get_current_user
-│   ├── models.py                ← SQLAlchemy ORM: User · UserQuery · IPCSection
+│   ├── email_service.py         ← OTP email via Resend API · HTML template · console fallback
+│   ├── models.py                ← SQLAlchemy ORM: User · UserQuery
 │   ├── schemas.py               ← Pydantic request/response validation schemas
 │   ├── database.py              ← SQLite engine · session factory · Base class
 │   ├── requirements.txt
 │   ├── .env.example
 │   ├── routers/
-│   │   ├── auth.py              ← POST /signup · POST /login · GET /me
-│   │   ├── query.py             ← POST /analyze · GET /history · GET /:id
+│   │   ├── auth.py              ← POST /signup · POST /login · POST /forgot-password · POST /verify-otp
+│   │   ├── query.py             ← POST /analyze · GET /history · GET /:id · DELETE
 │   │   └── report.py            ← GET /download/:id/pdf · GET /download/:id/docx
 │   └── agents/
 │       └── orchestrator.py      ← 5 AI agents · mock fallbacks · run_legal_analysis()
@@ -235,9 +241,10 @@ ai-legal-assistant/
         │   ├── page.tsx          ← Landing page · animated canvas background
         │   ├── layout.tsx        ← Root layout · Google Fonts · Toaster
         │   ├── globals.css       ← Global styles · CSS variables · scrollbar
-        │   ├── login/page.tsx    ← Split-panel login · password toggle
+        │   ├── login/page.tsx    ← Split-panel login · phase messages · client-side validation
         │   ├── signup/page.tsx   ← Signup · password strength meter
-        │   ├── dashboard/page.tsx← Query form · case history sidebar · voice input
+        │   ├── forgot-password/page.tsx ← Two-step OTP recovery · resend countdown
+        │   ├── dashboard/page.tsx← Query form · 5-agent progress · case history sidebar · voice input
         │   └── case/[id]/page.tsx← Analysis result · IPC cards · PDF/DOCX download
         └── lib/
             └── api.ts            ← Axios instance · token helpers · all API calls
@@ -274,7 +281,11 @@ Open `.env` and configure:
 DATABASE_URL=sqlite:///./legal_assistant.db
 SECRET_KEY=your-long-random-secret-key-here
 GEMINI_API_KEY=your_gemini_key_here   # Leave blank to use intelligent mock responses
-REDIS_URL=redis://localhost:6379      # Redis cache for faster performance
+REDIS_URL=redis://localhost:6379      # Optional — falls back to fakeredis automatically
+
+# For forgot-password OTP emails (optional in development — OTP prints to console)
+RESEND_API_KEY=re_your_key_here       # Get free key at resend.com
+FROM_EMAIL=onboarding@resend.dev      # Resend sandbox sender (sends only to your Resend account email)
 ```
 
 > **Get a free Gemini API key:** [aistudio.google.com](https://aistudio.google.com) → Get API Key → Create API Key. The free tier supports this project without any billing.

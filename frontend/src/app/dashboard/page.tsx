@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { queryApi, authApi, clearToken, isLoggedIn } from "@/lib/api";
+import { queryApi, authApi, clearToken, isLoggedIn, isSessionExpiredByInactivity, isTokenExpiredByAge, touchActivity } from "@/lib/api";
 import { Aurora } from "@/components/ui/aurora";
 
 interface HistoryItem {
@@ -24,9 +24,28 @@ export default function DashboardPage() {
   const [agentStep, setAgentStep] = useState(0);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [listening, setListening] = useState(false);
+  const [idleWarning, setIdleWarning] = useState(false);
   const recognitionRef = useRef<any>(null);
   const baseTextRef   = useRef("");
   const finalAccumRef = useRef("");
+  const idleTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warnTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Inactivity timeout constants ────────────────────────────────────────
+  const WARN_AFTER_MS   = 1 * 60 * 60 * 1000 + 45 * 60 * 1000; // 1h 45m
+  const LOGOUT_AFTER_MS = 2 * 60 * 60 * 1000;                    // 2h
+
+  const resetIdleTimers = useCallback(() => {
+    touchActivity();
+    setIdleWarning(false);
+    if (warnTimerRef.current)  clearTimeout(warnTimerRef.current);
+    if (idleTimerRef.current)  clearTimeout(idleTimerRef.current);
+    warnTimerRef.current  = setTimeout(() => setIdleWarning(true),          WARN_AFTER_MS);
+    idleTimerRef.current  = setTimeout(() => {
+      clearToken();
+      window.location.href = "/login?reason=idle";
+    }, LOGOUT_AFTER_MS);
+  }, []);
 
   const AGENTS = [
     "🧠 Agent 1 — Classifying legal domain...",
@@ -52,22 +71,57 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn()) { 
+    if (!isLoggedIn()) {
       window.location.href = "/login";
-      return; 
+      return;
+    }
+    // If user was inactive for 2+ hours since last activity, force logout
+    if (isSessionExpiredByInactivity()) {
+      clearToken();
+      window.location.href = "/login?reason=idle";
+      return;
+    }
+    // If JWT is older than 10 hours, force re-login (absolute session expiry)
+    if (isTokenExpiredByAge()) {
+      clearToken();
+      window.location.href = "/login?reason=expired";
+      return;
     }
     setMounted(true);
     fetchHistory();
-    // Load user name - failure here should NOT log user out
     authApi.getMe()
-      .then(r => setUserName(r.data.name || ""))
+      .then(r => {
+        setUserName(r.data.name || "");
+        // Show welcome toast here — after dashboard is mounted, timed correctly
+        if (sessionStorage.getItem("just_logged_in")) {
+          sessionStorage.removeItem("just_logged_in");
+          const name = r.data.name ? `, ${r.data.name.split(" ")[0]}` : "";
+          toast.success(`Welcome back${name}. Your cases are ready.`, {
+            duration: 3500,
+            icon: "⚖️",
+          });
+        }
+      })
       .catch(() => { /* silent — don't disrupt the page */ });
-  }, [fetchHistory]);
+
+    // Start inactivity timers
+    resetIdleTimers();
+
+    // Register interaction listeners to reset the idle clock
+    const events = ["mousemove", "keydown", "touchstart", "click", "scroll"];
+    events.forEach(ev => window.addEventListener(ev, resetIdleTimers, { passive: true }));
+
+    return () => {
+      events.forEach(ev => window.removeEventListener(ev, resetIdleTimers));
+      if (warnTimerRef.current) clearTimeout(warnTimerRef.current);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [fetchHistory, resetIdleTimers]);
 
   // Cycle agent status while loading
   useEffect(() => {
     if (!loading) { setAgentStep(0); return; }
-    const iv = setInterval(() => setAgentStep(s => (s + 1) % AGENTS.length), 2800);
+    const iv = setInterval(() => setAgentStep(s => (s + 1) % AGENTS.length), 2600);
     return () => clearInterval(iv);
   }, [loading]);
 
@@ -78,11 +132,13 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const res = await queryApi.analyze(q);
-      toast.success("Analysis complete!");
-      // Refresh history in background then navigate
-      fetchHistory();
+      // Navigate first so the result page is already loading, THEN show toast
+      // and refresh history in background — user sees the toast on the case page
       router.push(`/case/${res.data.query_id}`);
-      // intentional: don't clear loading state here to keep the agent progress bar active until unmount
+      // 600ms: enough for Next.js to start rendering the case page before toast appears
+      setTimeout(() => toast.success("Analysis complete! Opening your case..."), 600);
+      fetchHistory(); // background refresh — doesn't block navigation
+      // Keep loading=true so agent progress stays until unmount
     } catch (err: any) {
       const detail = err.response?.data?.detail || err.message || "Analysis failed";
       toast.error(detail);
@@ -93,7 +149,7 @@ export default function DashboardPage() {
   const handleLogout = () => {
     clearToken();
     toast.success("Signed out.");
-    window.location.href = "/";
+    window.location.href = "/login";
   };
 
   const handleDeleteOne = (id: number) => {
@@ -191,6 +247,18 @@ export default function DashboardPage() {
     <div style={{ minHeight: "100vh", background: "var(--ink)", fontFamily: "'Syne', system-ui, sans-serif" }}>
       <Aurora colorStops={["#1D4ED8", "#6366F1", "#060D18"]} amplitude={1.5} blend={120} speed={1.4} opacity={0.6} />
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 260, background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(59,130,246,0.07) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+
+      {/* ── Inactivity warning banner ─────────────────────────────────── */}
+      {idleWarning && (
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 200, background: "rgba(30,20,10,0.97)", border: "1px solid rgba(245,158,11,0.5)", borderRadius: 14, padding: "16px 24px", display: "flex", alignItems: "center", gap: 16, boxShadow: "0 8px 32px rgba(0,0,0,0.6)", maxWidth: 480, width: "calc(100% - 40px)" }}>
+          <span style={{ fontSize: 22 }}>⏳</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>Session expiring soon</p>
+            <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--dim)", lineHeight: 1.5 }}>You&apos;ll be signed out in ~15 minutes due to inactivity. Move your mouse or press a key to stay signed in.</p>
+          </div>
+          <button onClick={resetIdleTimers} style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", color: "var(--amber)", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Syne', sans-serif", whiteSpace: "nowrap" }}>Stay signed in</button>
+        </div>
+      )}
 
       {/* NAV */}
       <nav style={{ position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid var(--border)", backdropFilter: "blur(20px)", background: "rgba(10,12,16,0.92)", padding: "0 6%" }}>

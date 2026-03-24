@@ -13,13 +13,15 @@ export default function LoginPage() {
   const [showPw, setShowPw]  = useState(false);
   const [mounted, setMounted] = useState(false);
   const [msgIdx, setMsgIdx] = useState(0);
-  const M = ["Verifying...", "Decrypting...", "Opening Case Room..."];
+  // Timed to match: bcrypt ~300ms, JWT+cookie ~100ms, navigate ~200ms
+  const M = ["Checking credentials…", "Authenticating…", "Opening your dashboard…"];
 
   useEffect(() => {
     if (loading) {
+      // 500ms interval: 3 messages × 500ms = 1.5s covers worst-case login latency
       const interval = setInterval(() => {
         setMsgIdx(i => Math.min(i + 1, M.length - 1));
-      }, 1500);
+      }, 500);
       return () => clearInterval(interval);
     }
   }, [loading]);
@@ -29,6 +31,21 @@ export default function LoginPage() {
       window.location.href = "/dashboard";
       return;
     }
+    // Show a message if user was logged out due to inactivity
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("reason") === "idle") {
+      toast("You were signed out after 2 hours of inactivity.", {
+        icon: "⏱️",
+        duration: 5000,
+        style: { background: "#1a1200", border: "1px solid rgba(245,158,11,0.4)", color: "#FCD34D" },
+      });
+    } else if (params.get("reason") === "expired") {
+      toast("Your session has expired. Please sign in again.", {
+        icon: "🔒",
+        duration: 5000,
+        style: { background: "#1a1200", border: "1px solid rgba(245,158,11,0.4)", color: "#FCD34D" },
+      });
+    }
     setMounted(true);
     // Pre-compile dashboard so redirect after login is instant
     router.prefetch("/dashboard");
@@ -37,17 +54,28 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Instant client-side checks (no network round-trip needed) ────────────
+    if (!form.email.includes("@")) {
+      toast.error("Enter a valid email address."); return;
+    }
+    if (form.password.length < 6) {
+      toast.error("Password must be at least 6 characters."); return;
+    }
+
     setLoading(true);
     setMsgIdx(0);
     try {
       const res = await authApi.login(form);
-      saveToken(res.data.access_token); // saved in cookie + localStorage — persists until sign out
-      toast.success("Welcome back, Counselor.");
+      saveToken(res.data.access_token);
+      // Set flag BEFORE navigating so dashboard shows the toast after reload
+      sessionStorage.setItem("just_logged_in", "1");
       window.location.href = "/dashboard";
-      // Intentionally intentionally not setting loading false so button stays disabled while page transitions
+      // Keep loading=true while page transitions so button stays disabled
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Invalid credentials.");
       setLoading(false);
+      setMsgIdx(0);
     }
   };
 
@@ -142,6 +170,13 @@ export default function LoginPage() {
               </div>
             </div>
 
+            <div style={{ textAlign: "right", marginTop: -8 }}>
+              <Link href="/forgot-password" style={{ fontSize: 12, color: "var(--amber)", textDecoration: "none", fontWeight: 600, opacity: 0.85 }}
+                onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.opacity = "1"}
+                onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.opacity = "0.85"}>
+                Forgot Password?
+              </Link>
+            </div>
             <button type="submit" disabled={loading} className="btn-amber"
               style={{ width: "100%", justifyContent: "center", marginTop: 4, opacity: loading ? 0.7 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
               {loading ? (
@@ -152,7 +187,7 @@ export default function LoginPage() {
 
           <div style={{ marginTop: 24, padding: "14px 16px", background: "rgba(59,130,246,0.04)", border: "1px solid rgba(59,130,246,0.1)", borderRadius: 10 }}>
             <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
-              💡 <strong style={{ color: "var(--amber)" }}>Persistent sessions:</strong> Once signed in, you stay logged in until you manually sign out. No repeated logins.
+              ⏱️ <strong style={{ color: "var(--amber)" }}>Session policy:</strong> Sessions last 10 hours. You are signed out automatically after 2 hours of inactivity for security.
             </p>
           </div>
 
